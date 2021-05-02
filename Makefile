@@ -1,7 +1,7 @@
 OBJS	= main.o scanner.o parser.o
 SOURCE	= main.cpp scanner.cpp parser.cpp
 HEADER	= scanner.h parser.h
-OUT	    = statSem
+OUT	    = compfs
 CC	    = g++
 FLAGS	= -g -c -Wall
 
