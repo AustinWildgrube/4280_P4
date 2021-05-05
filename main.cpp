@@ -56,9 +56,9 @@ int main(int argc, char** argv) {
 
     // Get file name with code found here:
     // https://stackoverflow.com/a/24386991/8774510
-    std::string base_filename = fileName.substr(fileName.find_last_of("/\\") + 1);
-    std::string::size_type const p(base_filename.find_last_of('.'));
-    std::string file_without_extension = base_filename.substr(0, p);
+    string base_filename = fileName.substr(fileName.find_last_of("/\\") + 1);
+    string::size_type const p(base_filename.find_last_of('.'));
+    string file_without_extension = base_filename.substr(0, p);
 
     // To use ofstream it needed a string literal or a C String so we have to convert it
     auto back_to_cstr = fileName.c_str();
