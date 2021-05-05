@@ -46,9 +46,9 @@ int main(int argc, char** argv) {
     // Too many arguments were entered
     } else {
         cout << "[Error] Too many arguments were entered!" << endl;
-        cout << "[Info] Usage: ./frontEnd" << endl;
-        cout << "[Info] Usage: ./frontEnd [fileName].fs" << endl;
-        cout << "[Info] Usage: ./frontEnd < [fileName].fs" << endl;
+        cout << "[Info] Usage: ./compfs" << endl;
+        cout << "[Info] Usage: ./compfs [fileName].fs" << endl;
+        cout << "[Info] Usage: ./compfs < [fileName].fs" << endl;
         return 0;
     }
 
