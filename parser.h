@@ -13,7 +13,13 @@ private:
     static struct Node *addStructure(struct Node *, const Token&, struct Node *, std::string);
     static void printPreorder(struct Node*);
     static void traverseTree(struct Node*);
-    static void insertVar(std::string, int, int);
+
+    static std::string newTemp();
+    static std::string newTempLabel();
+    static std::string* splitUserInput(struct Node*);
+    static void checkVariables(struct Node*, std::string*);
+
+    static void insertVar(std::string, int, int, int);
     static void popVar();
     static void searchVar(const std::string&, int);
     static Token getNewToken();
@@ -50,6 +56,11 @@ struct varStack_t {
 struct blockStack_t {
     int varsInBlock = 0;
     int blockLevel = 0;
+};
+
+struct vars_t {
+    std::string name;
+    int value = 0;
 };
 
 #endif //PARSER_H

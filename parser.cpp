@@ -1,9 +1,12 @@
 // Author: Austin Wildgrube <akwwb6@mail.umsl.edu>
-// Date: 04/20/2021
+// Date: 05/04/2021
 
 #include <iostream>
 #include <cstdio>
 #include <utility>
+#include <fstream>
+#include <sstream>
+#include <vector>
 
 #include "parser.h"
 #include "scanner.h"
@@ -13,13 +16,17 @@ using namespace std;
 
 FILE *file;
 Token globalToken;
+ofstream asmFile;
+
 struct varStack_t varStack[99];
+struct vars_t vars[99];
 struct blockStack_t blockStack[99];
 char character, lookAhead;
+bool isGlobal = true;
 int varTotal;
 int blockCount;
-bool isGlobal = true;
-
+int varCt = 0;
+int labelCt = 0;
 
 /**
  * Main parse function
@@ -30,6 +37,9 @@ void Parser::parser(const char* fileName) {
 
     // Open our file
     file = fopen(fileName, "r");
+
+    // Create our ASM file
+    asmFile.open("something.txt");
 
     // We need to insert our root node ahead of time so it won't be inserted twice.
     Token fakeToken;
@@ -46,6 +56,21 @@ void Parser::parser(const char* fileName) {
 
     // Traverse our parse tree
     Parser::traverseTree(root);
+
+    // We are done so print STOP
+    asmFile << "STOP\n";
+
+    // We finish by printing our vars
+    for (auto & var : vars) {
+        if (!var.name.empty()) {
+            asmFile << var.name << " " << var.value << "\n";
+        }
+    }
+
+    // Close our file
+    asmFile.close();
+
+//    Parser::printPreorder(root);
 }
 
 /**
@@ -115,77 +140,282 @@ void Parser::printPreorder(struct Node* node) {
  * @param node
  */
 void Parser::traverseTree(struct Node* node) {
-    string variableIdentifiers[99];
+    auto *variableIdentifiers = (string *) "";
 
     // Check to make sure tree isn't empty
     if (node == nullptr)
         return;
 
+    // Since our token.userInput is concatenated words we need to split them apart
+    if (!node->token.userInput.empty()) {
+        // Get out user input
+        variableIdentifiers = Parser::splitUserInput(node);
+
+        // Check the variables in the statement
+        Parser::checkVariables(node, variableIdentifiers);
+    }
+
+    // Convert to our ASM code
+    if (node->token.block == "<goto>") {
+        asmFile << "BR " << variableIdentifiers[1] << "\n";
+    } else if (node->token.block == "<label>") {
+        asmFile << variableIdentifiers[1] << ": NOOP \n";
+    } else if (node->token.block == "<if>") {
+        Parser::traverseTree(node->childTwo);
+        string RO = variableIdentifiers[0];
+        string R1 = variableIdentifiers[1];
+        string R2 = variableIdentifiers[2];
+
+        Parser::traverseTree(node->childThree);
+        string tempVar = newTemp();
+
+        asmFile << "STORE " << tempVar << "\n";
+        Parser::traverseTree(node->childOne);
+
+        string Label = newTempLabel();
+        if (RO == "=>") {
+            asmFile << "SUB " << tempVar << "\n";
+            asmFile << "BRPOS " << Label << "\n";
+        } else if (RO == "=<") {
+            asmFile << "SUB " << tempVar << "\n";
+            asmFile << "BRNEG " << Label << "\n";
+        } else if (RO == "==") {
+            asmFile << "SUB " << tempVar << "\n";
+            asmFile << "BRPOS " << Label << "\n";
+            asmFile << "BRNEG " << Label << "\n";
+        } else if (RO == "[" && R1 == "==" && R2 == "]") {
+            asmFile << "SUB " << tempVar << "\n";
+            asmFile << "BRZERO " << Label << "\n";
+        } else if (RO == "%") {
+            asmFile << "MULT " << tempVar << "\n";
+            asmFile << "BRPOS " << Label << "\n";
+        }
+
+        Parser::traverseTree(node->childFour);
+        asmFile << Label << ": NOOP\n";
+    } else if (node->token.block == "<loop>") {
+        Parser::traverseTree(node->childTwo);
+        string RO = variableIdentifiers[0];
+        string R1 = variableIdentifiers[1];
+        string R2 = variableIdentifiers[2];
+
+        string tempVar = newTemp();
+        string startLabel = newTempLabel();
+        string endLabel = newTempLabel();
+
+        asmFile << startLabel << ": ";
+        Parser::traverseTree(node->childOne);
+        asmFile << "STORE " << tempVar << "\n";
+        Parser::traverseTree(node->childThree);
+
+        if (RO == "=>") {
+            asmFile << "SUB " << tempVar << "\n";
+            asmFile << "BRPOS " << endLabel << "\n";
+        } else if (RO == "=<") {
+            asmFile << "SUB " << tempVar << "\n";
+            asmFile << "BRNEG " << endLabel << "\n";
+        } else if (RO == "==") {
+            asmFile << "SUB " << tempVar << "\n";
+            asmFile << "BRPOS " << endLabel << "\n";
+            asmFile << "BRNEG " << endLabel << "\n";
+        } else if (RO == "[" && R1 == "==" && R2 == "]") {
+            asmFile << "SUB " << tempVar << "\n";
+            asmFile << "BRZERO " << endLabel << "\n";
+        } else if (RO == "%") {
+            asmFile << "MULT " << tempVar << "\n";
+            asmFile << "BRPOS " << endLabel << "\n";
+        }
+
+        Parser::traverseTree(node->childFour);
+        asmFile << "BR " << startLabel << "\n";
+        asmFile << endLabel << ": NOOP\n";
+    } else if (node->token.block == "<assign>") {
+        string varName = variableIdentifiers[1];
+
+        Parser::traverseTree(node->childOne);
+        asmFile << "STORE " << varName << "\n";
+    } else if (node->token.block == "<in>") {
+        asmFile << "READ " << variableIdentifiers[1] << "\n";
+    } else if (node->token.block == "<out>") {
+        string tempVar = newTemp();
+
+        Parser::traverseTree(node->childOne);
+        asmFile << "STORE " << tempVar << "\n";
+        asmFile << "WRITE " << tempVar << "\n";
+    } else if (node->token.block == "<expr>") {
+        if (variableIdentifiers[0] == "-") {
+            string tempVar = Parser::newTemp();
+
+            Parser::traverseTree(node->childTwo);
+            asmFile << "STORE " << tempVar << "\n";
+
+            Parser::traverseTree(node->childOne);
+            asmFile << "SUB " << tempVar << "\n";
+        } else {
+            Parser::traverseTree(node->childOne);
+        }
+    } else if (node->token.block == "<N>") {
+        if (variableIdentifiers[0] == "/") {
+            string tempVar = Parser::newTemp();
+
+            Parser::traverseTree(node->childTwo);
+            asmFile << "STORE " << tempVar << "\n";
+
+            Parser::traverseTree(node->childOne);
+            asmFile << "DIV " << tempVar << "\n";
+
+        } else if (variableIdentifiers[0] == "*") {
+            string tempVar = Parser::newTemp();
+
+            Parser::traverseTree(node->childTwo);
+            asmFile << "STORE " << tempVar << "\n";
+
+            Parser::traverseTree(node->childOne);
+            asmFile << "MULT " << tempVar << "\n";
+        } else {
+            Parser::traverseTree(node->childOne);
+        }
+    } else if (node->token.block == "<A>") {
+        if (variableIdentifiers[0] == "+") {
+            string tempVar = Parser::newTemp();
+
+            Parser::traverseTree(node->childTwo);
+            asmFile << "STORE " << tempVar << "\n";
+
+            Parser::traverseTree(node->childOne);
+            asmFile << "ADD " << tempVar << "\n";
+        } else {
+            Parser::traverseTree(node->childOne);
+        }
+    } else if (node->token.block == "<M>") {
+        if (variableIdentifiers[0] == "*") {
+            Parser::traverseTree(node->childOne);
+            asmFile << "MULT -1\n";
+        } else {
+            Parser::traverseTree(node->childOne);
+        }
+    } else if (node->token.block == "<R>") {
+        asmFile << "LOAD " << variableIdentifiers[0] << "\n";
+    } else {
+        // Recursively process children
+        Parser::traverseTree(node->childOne);
+        Parser::traverseTree(node->childTwo);
+        Parser::traverseTree(node->childThree);
+        Parser::traverseTree(node->childFour);
+    }
+}
+
+/**
+ * Here where we check if our token is a variable or if it uses a variable. If it uses a variable, we need to
+ * search and if it is a variable we need to add it to our array
+ * @param node
+ * @param variableIdentifiers
+ */
+void Parser::checkVariables(struct Node* node, string* variableIdentifiers) {
+    // Here we check level to see what block we are in and if we need to pop
+    if (node->level <= blockStack[blockCount].blockLevel && blockCount != 0) {
+        // Pop block because we found the end
+        Parser::popVar();
+    }
+
+    // Here we are beginning a new block
+    if (node->token.block == "<block>") {
+        blockCount++;
+        blockStack[blockCount].blockLevel = node->level;
+    }
+
+    // If we have a vars block we need to add it to our stack
+    if (node->token.block == "<vars>") {
+        blockStack[blockCount].varsInBlock++;
+
+        // We need to check if the number is negative
+        int numToBe;
+        if (variableIdentifiers[3] == "-") {
+            numToBe = stoi(variableIdentifiers[4]) * -1;
+        } else {
+            numToBe = stoi(variableIdentifiers[3]);
+        }
+
+        // Insert the variable into our array
+        Parser::insertVar(variableIdentifiers[1], node->token.lineNumber, node->token.lineNumber, numToBe);
+
+    // If we have anything but a vars block we need to search to see if it was declared
+    } else if (node->token.block == "<R>") {
+        Parser::searchVar(variableIdentifiers[0], node->token.lineNumber);
+    } else if (node->token.block == "<label>" || node->token.block == "<in>" || node->token.block == "<goto>" ||
+               node->token.block == "<assign>" || node->token.block == "<label>") {
+        Parser::searchVar(variableIdentifiers[1], node->token.lineNumber);
+    }
+}
+
+/**
+ * Since our user input is all one string (mistakenly made this way and it was too hard to change it) we need to
+ * separate it into individual strings
+ * @param node
+ * @return
+ */
+string* Parser::splitUserInput(struct Node* node) {
+    static string variableIdentifiers[99];
     string word;
     int count = 0;
 
-    // Since our token.userInput is concatenated words we need to split them apart
-    if (!node->token.userInput.empty()) {
-        for (auto x : node->token.userInput) {
-            // Check for spaces between words
-            if (x != ' ') {
-                word += x;
+    // Loop through the input
+    for (auto x : node->token.userInput) {
+        // Check for spaces or semicolons between words
+        if (x != ' ' && x != ';') {
+            word += x;
 
-            // Otherwise we concatenate the letter
-            } else {
-                variableIdentifiers[count] = word;
-
-                if (word == "begin") {
-                    isGlobal = false;
-                }
-
-                word = "";
-                count++;
-            }
-        }
-
-        if (!word.empty()) {
+        // Otherwise we concatenate the letter
+        } else {
             variableIdentifiers[count] = word;
 
+            // If we find began we cannot have global variables anymore
             if (word == "begin") {
                 isGlobal = false;
             }
 
             word = "";
-        }
-
-        // Here we check level to see what block we are in and if we need to pop
-        if (node->level <= blockStack[blockCount].blockLevel && blockCount != 0) {
-            //Pop block because we found the end
-            Parser::popVar();
-        }
-
-        // Here we are beginning a new block
-        if (node->token.block == "<block>") {
-            blockCount++;
-            blockStack[blockCount].blockLevel = node->level;
-        }
-
-        // If we have a vars block we need to add it to our stack
-        if (node->token.block == "<vars>") {
-            blockStack[blockCount].varsInBlock++;
-
-            Parser::insertVar(variableIdentifiers[1], node->token.lineNumber, node->token.lineNumber);
-
-        // If we have anything but a vars block we need to search to see if it was declared
-        } else if (node->token.block == "<R>") {
-            Parser::searchVar(variableIdentifiers[0], node->token.lineNumber);
-        } else if (node->token.block == "<label>" || node->token.block == "<in>" || node->token.block == "<goto>" ||
-                   node->token.block == "<assign>" || node->token.block == "<label>") {
-            Parser::searchVar(variableIdentifiers[1], node->token.lineNumber);
+            count++;
         }
     }
 
-    // Recursively process children
-    Parser::traverseTree(node->childOne);
-    Parser::traverseTree(node->childTwo);
-    Parser::traverseTree(node->childThree);
-    Parser::traverseTree(node->childFour);
+    // There is no word so reset
+    if (!word.empty()) {
+        variableIdentifiers[count] = word;
+
+        if (word == "begin") {
+            isGlobal = false;
+        }
+    }
+
+    return variableIdentifiers;
+}
+
+/**
+ * Here we get a temporary storage variable by concatenating i++.
+ * @return
+ */
+string Parser::newTemp() {
+    std::ostringstream tempVariable;
+    tempVariable << "T" << varCt++;
+
+    vars[varTotal].value = 0;
+    vars[varTotal].name = tempVariable.str();
+    varTotal++;
+
+    return tempVariable.str();
+}
+
+/**
+ * Here we get a temporary storage label by concatenating i++.
+ * Used to branch inside our ASM.
+ * @return
+ */
+string Parser::newTempLabel() {
+    std::ostringstream tempLabel;
+    tempLabel << "L" << labelCt++;
+
+    return tempLabel.str();
 }
 
 /**
@@ -194,7 +424,7 @@ void Parser::traverseTree(struct Node* node) {
  * @param identifierLine
  * @param lineNumber
  */
-void Parser::insertVar(string identifier, int identifierLine, int lineNumber) {
+void Parser::insertVar(string identifier, int identifierLine, int lineNumber, int value) {
     // Check to make sure it is not already in stack
     for (int i = 0; i < varTotal; i++) {
         if (varStack[i].name == identifier) {
@@ -209,6 +439,9 @@ void Parser::insertVar(string identifier, int identifierLine, int lineNumber) {
             }
         }
     }
+    // Also insert into variable array
+    vars[varTotal].value = value;
+    vars[varTotal].name = identifier;
 
     // Insert the name, if it is global, and the line number into the stack
     varStack[varTotal].name = std::move(identifier);
@@ -365,6 +598,14 @@ struct Node *Parser::varsToken(struct Node* node, struct Node* originNode) {
                 statement += globalToken.userInput;
 
                 globalToken = Parser::getNewToken();
+
+                // The number could be negative
+                if (globalToken.userInput == "-") {
+                    statement += " ";
+                    statement += globalToken.userInput;
+
+                    globalToken = Parser::getNewToken();
+                }
 
                 // Followed by a number
                 if (globalToken.id == "NUM_tk") {
