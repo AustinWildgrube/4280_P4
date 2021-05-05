@@ -143,4 +143,5 @@ Temporary Items
 /P1
 /scanner.o
 /parser.o
-/statSem
+/compfs
+/something.txt
