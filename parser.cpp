@@ -32,14 +32,19 @@ int labelCt = 0;
  * Main parse function
  * @param fileName
  */
-void Parser::parser(const char* fileName) {
+void Parser::parser(const char* fileName, bool isKeyboard, const string& usersFile) {
     struct Node* root = nullptr;
 
     // Open our file
     file = fopen(fileName, "r");
 
     // Create our ASM file
-    asmFile.open("something.txt");
+    if (isKeyboard)
+        asmFile.open("kb.asm");
+    else {
+        string usersFileConcat = usersFile + ".asm";
+        asmFile.open(usersFileConcat);
+    }
 
     // We need to insert our root node ahead of time so it won't be inserted twice.
     Token fakeToken;

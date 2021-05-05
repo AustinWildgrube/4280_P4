@@ -19,9 +19,11 @@ using namespace std;
 int main(int argc, char** argv) {
     string inputString;
     string fileName;
+    bool isKeyboard = false;
 
     // If one argument we need to read data to a temporary text file
     if (argc == 1) {
+        isKeyboard = true;
         fileName = "temp_data.txt";
         ofstream tempFile("temp_data.txt");
 
@@ -52,9 +54,15 @@ int main(int argc, char** argv) {
         return 0;
     }
 
+    // Get file name with code found here:
+    // https://stackoverflow.com/a/24386991/8774510
+    std::string base_filename = fileName.substr(fileName.find_last_of("/\\") + 1);
+    std::string::size_type const p(base_filename.find_last_of('.'));
+    std::string file_without_extension = base_filename.substr(0, p);
+
     // To use ofstream it needed a string literal or a C String so we have to convert it
     auto back_to_cstr = fileName.c_str();
-    Parser::parser(back_to_cstr);
+    Parser::parser(back_to_cstr, isKeyboard, file_without_extension);
 
     return 0;
 }
