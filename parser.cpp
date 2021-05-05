@@ -299,7 +299,7 @@ void Parser::traverseTree(struct Node* node) {
         } else {
             Parser::traverseTree(node->childOne);
         }
-    } else if (node->token.block == "<R>") {
+    } else if (node->token.block == "<R>" && variableIdentifiers[0] != "(") {
         asmFile << "LOAD " << variableIdentifiers[0] << "\n";
     } else {
         // Recursively process children
@@ -481,7 +481,7 @@ void Parser::searchVar(const string& identifier, int identifierLine) {
     bool isDeclared = false;
 
     // Identifiers must start with a letter or _
-    if (identifier.empty() || isdigit(identifier[0]))
+    if (identifier.empty() || isdigit(identifier[0]) || identifier[0] == '(')
         return;
 
     // Check all vars in stack to see if it is there
