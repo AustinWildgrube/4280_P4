@@ -38,6 +38,11 @@ void Parser::parser(const char* fileName, bool isKeyboard, const string& usersFi
     // Open our file
     file = fopen(fileName, "r");
 
+    if (file == nullptr) {
+        cout << "File could not be loaded." << endl << "Most likely it doesn't exist." << endl;
+        exit(1);
+    }
+
     // Create our ASM file
     if (isKeyboard)
         asmFile.open("kb.asm");
