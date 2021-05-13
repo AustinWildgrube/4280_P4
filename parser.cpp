@@ -18,9 +18,11 @@ FILE *file;
 Token globalToken;
 ofstream asmFile;
 
+static string variableIdentifiers[99];
+struct blockStack_t blockStack[99];
 struct varStack_t varStack[99];
 struct vars_t vars[99];
-struct blockStack_t blockStack[99];
+
 char character, lookAhead;
 bool isGlobal = true;
 int varTotal;
@@ -150,8 +152,6 @@ void Parser::printPreorder(struct Node* node) {
  * @param node
  */
 void Parser::traverseTree(struct Node* node) {
-    auto *variableIdentifiers = (string *) "";
-
     // Check to make sure tree isn't empty
     if (node == nullptr)
         return;
@@ -159,7 +159,7 @@ void Parser::traverseTree(struct Node* node) {
     // Since our token.userInput is concatenated words we need to split them apart
     if (!node->token.userInput.empty()) {
         // Get out user input
-        variableIdentifiers = Parser::splitUserInput(node);
+        Parser::splitUserInput(node);
 
         // Check the variables in the statement
         Parser::checkVariables(node, variableIdentifiers);
@@ -365,7 +365,6 @@ void Parser::checkVariables(struct Node* node, string* variableIdentifiers) {
  * @return
  */
 string* Parser::splitUserInput(struct Node* node) {
-    static string variableIdentifiers[99];
     string word;
     int count = 0;
 
